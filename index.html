@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Unnvikelse</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Lar klikk gå gjennom til spillet hvis nødvendig */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #00f3ff;
+            text-shadow: 0 0 10px #00f3ff;
+        }
+
+        #start-screen, #game-over-screen {
+            background: rgba(0, 0, 0, 0.85);
+            padding: 40px;
+            border: 2px solid #00f3ff;
+            border-radius: 10px;
+            box-shadow: 0 0 20px #00f3ff;
+            pointer-events: auto;
+            transition: opacity 0.3s;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 48px;
+            color: #ff0055;
+            text-shadow: 0 0 15px #ff0055;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        p {
+            font-size: 18px;
+            color: #ccc;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 20px;
+            background: transparent;
+            color: #00f3ff;
+            border: 2px solid #00f3ff;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 0 10px #00f3ff;
+        }
+
+        button:hover {
+            background: #00f3ff;
+            color: black;
+            box-shadow: 0 0 30px #00f3ff;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div class="hud" id="score-display">Poeng: 0</div>
+        
+        <div id="start-screen">
+            <h1>Neon Unnvikelse</h1>
+            <p>Bruk <strong>Venstre</strong> og <strong>Høyre</strong> piltast for å styre.</p>
+            <p>Unngå de røde blokkene. Samle poeng over tid.</p>
+            <button onclick="startGame()">Start Spill</button>
+        </div>
+
+        <div id="game-over-screen" class="hidden">
+            <h1>Spillet er Slutt</h1>
+            <p id="final-score">Du fikk 0 poeng</p>
+            <button onclick="startGame()">Prøv Igjen</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // --- Oppsett ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elementer
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const scoreDisplay = document.getElementById('score-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // Spillvariabler
+        let width, height;
+        let animationId;
+        let score = 0;
+        let gameSpeed = 5;
+        let isGameOver = false;
+        let frames = 0;
+
+        // Input håndtering
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        // Håndter vindusstørrelse
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Klasser ---
+
+        class Player {
+            constructor() {
+                this.width = 40;
+                this.height = 40;
+                this.x = width / 2 - this.width / 2;
+                this.y = height - 100;
+                this.speed = 8;
+                this.color = '#00f3ff';
+            }
+
+            update() {
+                if (keys.ArrowLeft && this.x > 0) {
+                    this.x -= this.speed;
+                }
+                if (keys.ArrowRight && this.x + this.width < width) {
+                    this.x += this.speed;
+                }
+            }
+
+            draw() {
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                
+                // Tegn skipet (en trekant for kulere look)
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.width/2, this.y);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.lineTo(this.x, this.y + this.height);
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Obstacle {
+            constructor() {
+                this.width = Math.random() * 60 + 30; // Bredde mellom 30 og 90
+                this.height = 30;
+                this.x = Math.random() * (width - this.width);
+                this.y = -this.height;
+                this.speed = gameSpeed + Math.random() * 2;
+                this.color = '#ff0055';
+            }
+
+            update() {
+                this.y += this.speed;
+            }
+
+            draw() {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 3;
+                this.speedY = Math.random() * 5 + 2; // Farten på stjernene/partiklene
+                this.color = color;
+            }
+            
+            update() {
+                this.y += this.speedY;
+                if (this.y > height) {
+                    this.y = 0;
+                    this.x = Math.random() * width;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = 0.6;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // --- Spillobjekter ---
+        let player;
+        let obstacles = [];
+        let particles = [];
+
+        function init() {
+            player = new Player();
+            obstacles = [];
+            particles = [];
+            score = 0;
+            gameSpeed = 5;
+            frames = 0;
+            isGameOver = false;
+
+            // Lag bakgrunnsstjerner
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle(Math.random() * width, Math.random() * height, '#ffffff'));
+            }
+        }
+
+        // --- Hovedløkke ---
+        function animate() {
+            if (isGameOver) return;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Oppdater og tegn bakgrunn
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // 2. Oppdater spiller
+            player.update();
+            player.draw();
+
+            // 3. Generer hindringer
+            if (frames % 40 === 0) { // Hvor ofte de dukker opp
+                obstacles.push(new Obstacle());
+            }
+
+            // Øk vanskelighetsgrad over tid
+            if (frames % 500 === 0) {
+                gameSpeed += 0.5;
+            }
+
+            // 4. Oppdater og sjekk kollisjon hindringer
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i];
+                obs.update();
+                obs.draw();
+
+                // Kollisjonssjekk (Axis-Aligned Bounding Box)
+                if (
+                    player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y
+                ) {
+                    gameOver();
+                }
+
+                // Fjern hindringer som er utenfor skjermen
+                if (obs.y > height) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                    scoreDisplay.innerText = `Poeng: ${score}`;
+                }
+            }
+
+            frames++;
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function startGame() {
+            init();
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            animate();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(animationId);
+            finalScoreDisplay.innerText = `Du fikk ${score} poeng`;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+    </script>
+</body>
+</html>
