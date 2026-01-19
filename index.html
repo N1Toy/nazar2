@@ -1,334 +1,667 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Unnvikelse</title>
+    <title>BIO-DOME: Protocol Survival</title>
     <style>
+        :root {
+            --bg-dark: #0b0c10;
+            --panel-bg: rgba(31, 40, 51, 0.85);
+            --neon-blue: #45a29e;
+            --neon-green: #66fcf1;
+            --neon-red: #ff3838;
+            --neon-orange: #ff9f43;
+            --text-main: #c5c6c7;
+            --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+
         body {
             margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             overflow: hidden;
-            background-color: #050505;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            user-select: none;
+            height: 100vh;
+            display: flex;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
         }
 
-        canvas {
-            display: block;
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
+        /* --- LAYOUT --- */
+        #app {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* Lar klikk gå gjennom til spillet hvis nødvendig */
+            gap: 10px;
+            padding: 20px;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: var(--glass-border);
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        h2, h3 { margin: 0 0 15px 0; text-transform: uppercase; letter-spacing: 2px; font-size: 1.2rem; color: var(--neon-blue); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+
+        /* --- LEFT PANEL (STATS) --- */
+        .resource-row {
+            display: flex;
+            justify-content: space-between;
             align-items: center;
-            text-align: center;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
         }
 
-        .hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #00f3ff;
-            text-shadow: 0 0 10px #00f3ff;
+        .res-name { color: #fff; font-weight: bold; }
+        .res-val { font-family: 'Courier New', monospace; color: var(--neon-green); }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
         }
 
-        #start-screen, #game-over-screen {
-            background: rgba(0, 0, 0, 0.85);
-            padding: 40px;
-            border: 2px solid #00f3ff;
-            border-radius: 10px;
-            box-shadow: 0 0 20px #00f3ff;
-            pointer-events: auto;
-            transition: opacity 0.3s;
+        .bar-fill {
+            height: 100%;
+            width: 50%;
+            transition: width 0.3s ease, background-color 0.3s;
         }
 
-        h1 {
-            margin: 0 0 10px 0;
-            font-size: 48px;
-            color: #ff0055;
-            text-shadow: 0 0 15px #ff0055;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-
-        p {
-            font-size: 18px;
-            color: #ccc;
-        }
-
-        button {
-            margin-top: 20px;
-            padding: 15px 30px;
-            font-size: 20px;
-            background: transparent;
-            color: #00f3ff;
-            border: 2px solid #00f3ff;
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            margin-top: 10px;
+            background: rgba(69, 162, 158, 0.2);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
             cursor: pointer;
-            text-transform: uppercase;
-            font-weight: bold;
+            border-radius: 6px;
             transition: all 0.2s;
-            box-shadow: 0 0 10px #00f3ff;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8rem;
         }
 
-        button:hover {
-            background: #00f3ff;
-            color: black;
-            box-shadow: 0 0 30px #00f3ff;
+        .btn-action:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue); }
+        .btn-action:active { transform: scale(0.98); }
+        .btn-danger { border-color: var(--neon-red); color: var(--neon-red); background: rgba(255, 56, 56, 0.1); }
+        .btn-danger:hover { background: var(--neon-red); color: white; box-shadow: 0 0 15px var(--neon-red); }
+
+        /* --- CENTER PANEL (FARM) --- */
+        #farm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+            padding: 10px;
+            overflow-y: auto;
         }
 
-        .hidden {
-            opacity: 0;
-            pointer-events: none !important;
+        .plot {
+            aspect-ratio: 1;
+            background: rgba(0,0,0,0.3);
+            border: 1px dashed rgba(255,255,255,0.2);
+            border-radius: 8px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .plot:hover { border-color: var(--neon-green); background: rgba(102, 252, 241, 0.05); }
+        
+        .plant-icon { font-size: 2.5rem; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .plot.growing .plant-icon { transform: scale(0.5); opacity: 0.7; }
+        .plot.mature .plant-icon { transform: scale(1.1); filter: drop-shadow(0 0 5px var(--neon-green)); animation: pulse 2s infinite; }
+        
+        .timer-ring {
+            position: absolute;
+            top: 5px; right: 5px;
+            font-size: 0.7rem;
+            color: #aaa;
+        }
+
+        /* --- RIGHT PANEL (UPGRADES & LOG) --- */
+        #upgrade-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .upgrade-item {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #666;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .upgrade-item:hover { background: rgba(255,255,255,0.1); }
+        .upgrade-item.affordable { border-left-color: var(--neon-green); }
+        .upgrade-item.locked { opacity: 0.5; pointer-events: none; }
+        
+        .upg-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 0.9rem; }
+        .upg-cost { color: var(--neon-orange); font-size: 0.8rem; }
+        .upg-desc { font-size: 0.75rem; color: #888; margin-top: 5px; }
+
+        #game-log {
+            height: 150px;
+            margin-top: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            overflow-y: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .log-warn { color: var(--neon-red); }
+        .log-good { color: var(--neon-green); }
+
+        /* --- OVERLAY & MODALS --- */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column;
+        }
+        .hidden { display: none !important; }
+
+        /* --- ANIMATIONS --- */
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        /* Floating Text Particles */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            font-weight: bold;
+            font-size: 1.2rem;
+            animation: floatUp 1s forwards;
+            z-index: 100;
+            text-shadow: 0 0 3px black;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-30px); }
+        }
+
+        /* Mobile tweaks */
+        @media (max-width: 800px) {
+            #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; overflow-y: auto; display: block; }
+            .panel { margin-bottom: 20px; height: auto; }
+            body { overflow: auto; height: auto; }
         }
     </style>
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div class="hud" id="score-display">Poeng: 0</div>
+<div id="overlay">
+    <h1 style="color: var(--neon-green); text-shadow: 0 0 20px var(--neon-green); font-size: 3rem; margin-bottom: 0;">BIO-DOME</h1>
+    <h3 style="color: var(--neon-blue);">PROTOCOL: SURVIVAL</h3>
+    <p style="max-width: 400px; text-align: center; color: #888;">
+        Вы — ИИ управления последней био-фермой. <br>
+        Поддерживайте уровень Энергии и Воды. Выращивайте культуры. Улучшайте модули.<br>
+        Если Жизнеспособность ядра упадет до 0 — мы обречены.
+    </p>
+    <button class="btn-action" style="width: 200px;" onclick="Game.start()">Инициализация</button>
+</div>
+
+<div id="app">
+    <div class="panel">
+        <h2>Состояние Системы</h2>
         
-        <div id="start-screen">
-            <h1>Neon Unnvikelse</h1>
-            <p>Bruk <strong>Venstre</strong> og <strong>Høyre</strong> piltast for å styre.</p>
-            <p>Unngå de røde blokkene. Samle poeng over tid.</p>
-            <button onclick="startGame()">Start Spill</button>
+        <div class="resource-row" style="flex-direction: column; align-items: flex-start;">
+            <div style="display:flex; justify-content:space-between; width:100%">
+                <span class="res-name" style="color:var(--neon-red)">Целостность Ядра</span>
+                <span id="hp-val" class="res-val">100%</span>
+            </div>
+            <div class="progress-bar"><div id="hp-bar" class="bar-fill" style="background: var(--neon-red); width: 100%;"></div></div>
         </div>
 
-        <div id="game-over-screen" class="hidden">
-            <h1>Spillet er Slutt</h1>
-            <p id="final-score">Du fikk 0 poeng</p>
-            <button onclick="startGame()">Prøv Igjen</button>
+        <hr style="width:100%; border:0; border-top:1px solid rgba(255,255,255,0.1); margin: 15px 0;">
+
+        <div class="resource-row">
+            <span class="res-name">⚡ Энергия</span>
+            <span id="energy-val" class="res-val">100/100</span>
+        </div>
+        <div class="progress-bar" style="margin-top:-10px; margin-bottom:15px;">
+            <div id="energy-bar" class="bar-fill" style="background: var(--neon-orange); width: 100%;"></div>
+        </div>
+
+        <div class="resource-row">
+            <span class="res-name">💧 Вода</span>
+            <span id="water-val" class="res-val">100/100</span>
+        </div>
+        <div class="progress-bar" style="margin-top:-10px; margin-bottom:15px;">
+            <div id="water-bar" class="bar-fill" style="background: var(--neon-blue); width: 100%;"></div>
+        </div>
+
+        <div class="resource-row">
+            <span class="res-name">🧬 Биомасса</span>
+            <span id="bio-val" class="res-val">0</span>
+        </div>
+
+        <div style="margin-top: auto;">
+            <button class="btn-action" onclick="Game.manualRecharge()">Аварийная Генерация (+5⚡)</button>
+            <button class="btn-action" onclick="Game.manualWater()" style="margin-top:5px; border-color:var(--neon-blue)">Синтез Воды (+5💧)</button>
         </div>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
+    <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>Гидропонный Сектор</h2>
+            <span id="plots-count" style="font-size:0.8rem; color:#666;">Ячейки: 4</span>
+        </div>
+        <div id="farm-grid">
+            </div>
+    </div>
 
-    <script>
-        // --- Oppsett ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+    <div class="panel">
+        <h2>Модули Улучшений</h2>
+        <div id="upgrade-list">
+            </div>
         
-        // UI Elementer
-        const startScreen = document.getElementById('start-screen');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const scoreDisplay = document.getElementById('score-display');
-        const finalScoreDisplay = document.getElementById('final-score');
+        <h2>Системный Лог</h2>
+        <div id="game-log"></div>
+    </div>
+</div>
 
-        // Spillvariabler
-        let width, height;
-        let animationId;
-        let score = 0;
-        let gameSpeed = 5;
-        let isGameOver = false;
-        let frames = 0;
+<script>
+/**
+ * BIO-DOME GAME ENGINE
+ * Compact, Optimized, Feature-rich
+ */
 
-        // Input håndtering
-        const keys = {
-            ArrowLeft: false,
-            ArrowRight: false
-        };
+const CONFIG = {
+    tickRate: 1000, // ms
+    saveKey: 'bioDomeSave_v1',
+    initial: { hp: 100, energy: 100, maxEnergy: 100, water: 100, maxWater: 100, bio: 0, plots: 4 },
+    plants: [
+        { id: 'algae', name: 'Синие Водоросли', icon: '🌿', cost: 10, waterCost: 10, growTime: 3, reward: 15, desc: 'Быстро, но мало.' },
+        { id: 'potato', name: 'Космо-Картофель', icon: '🥔', cost: 25, waterCost: 20, growTime: 8, reward: 50, desc: 'Питательно.' },
+        { id: 'flower', name: 'Неон-Цветок', icon: '🌺', cost: 100, waterCost: 50, growTime: 20, reward: 300, desc: 'Высокая ценность.' }
+    ]
+};
 
-        window.addEventListener('keydown', (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+const UPGRADES = [
+    { id: 'solar1', name: 'Солнечные Панели I', cost: 50, effect: 'energyGen', val: 1, desc: '+1 Энергии/сек' },
+    { id: 'water1', name: 'Фильтры Воды I', cost: 50, effect: 'waterGen', val: 1, desc: '+1 Воды/сек' },
+    { id: 'plot1', name: 'Расширение Сектора', cost: 150, effect: 'addPlot', val: 1, desc: '+1 Ячейка для посадки' },
+    { id: 'solar2', name: 'Солнечные Панели II', cost: 250, effect: 'energyGen', val: 2, desc: '+2 Энергии/сек' },
+    { id: 'auto1', name: 'Авто-Полив', cost: 500, effect: 'reduceWater', val: 0.8, desc: '-20% расхода воды на посадку' },
+    { id: 'plot2', name: 'Расширение Сектора II', cost: 800, effect: 'addPlot', val: 2, desc: '+2 Ячейки для посадки' },
+    { id: 'genetic', name: 'ГМО Семена', cost: 1500, effect: 'growSpeed', val: 0.7, desc: 'Растения растут на 30% быстрее' }
+];
+
+class GameEngine {
+    constructor() {
+        this.state = { ...CONFIG.initial, upgrades: [], plotsData: [] };
+        this.modifiers = { energyGen: 0, waterGen: 0, growSpeed: 1, waterCostMult: 1 };
+        this.timer = null;
+        this.running = false;
+        
+        // Init Plots
+        this.ensurePlots();
+    }
+
+    start() {
+        if(this.running) return;
+        document.getElementById('overlay').classList.add('hidden');
+        this.load();
+        this.renderUpgrades();
+        this.renderPlots();
+        this.running = true;
+        this.timer = setInterval(() => this.tick(), CONFIG.tickRate);
+        this.log("Система запущена. Жизнеобеспечение активно.", "good");
+    }
+
+    ensurePlots() {
+        while(this.state.plotsData.length < this.state.plots) {
+            this.state.plotsData.push({ id: Date.now() + Math.random(), state: 'empty', plant: null, progress: 0, maxTime: 0 });
+        }
+    }
+
+    tick() {
+        if (!this.running) return;
+
+        // 1. Resources Passive Logic
+        // Base drain
+        let energyChange = -2 + this.modifiers.energyGen;
+        let waterChange = -1 + this.modifiers.waterGen;
+
+        this.addResource('energy', energyChange);
+        this.addResource('water', waterChange);
+
+        // Survival Check
+        if (this.state.energy <= 0 || this.state.water <= 0) {
+            this.state.hp -= 5;
+            this.log("ВНИМАНИЕ: Критический дефицит ресурсов! Урон ядру.", "warn");
+            UI.shake();
+        } else if (this.state.hp < 100 && this.state.energy > 50 && this.state.water > 50) {
+            this.state.hp += 1; // Regen if healthy
+        }
+
+        if (this.state.hp <= 0) this.gameOver();
+
+        // 2. Grow Plants
+        this.state.plotsData.forEach(plot => {
+            if (plot.state === 'growing') {
+                plot.progress += 1;
+                if (plot.progress >= plot.maxTime) {
+                    plot.state = 'mature';
+                    this.log(`${plot.plant.name} созрел!`, "good");
+                }
+                UI.updatePlot(plot);
+            }
         });
 
-        window.addEventListener('keyup', (e) => {
-            if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-        });
+        // 3. UI Updates
+        UI.updateStats();
+        UI.checkUpgrades();
+        this.save();
+    }
 
-        // Håndter vindusstørrelse
-        function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
+    addResource(type, amount) {
+        if (type === 'bio') {
+            this.state.bio += amount;
+        } else {
+            const max = type === 'energy' ? this.state.maxEnergy : this.state.maxWater;
+            this.state[type] = Math.min(max, Math.max(0, this.state[type] + amount));
         }
-        window.addEventListener('resize', resize);
-        resize();
+    }
 
-        // --- Klasser ---
+    manualRecharge() {
+        this.addResource('energy', 5);
+        UI.spawnParticle(event.clientX, event.clientY, "+5⚡", "#ff9f43");
+        UI.updateStats();
+    }
 
-        class Player {
-            constructor() {
-                this.width = 40;
-                this.height = 40;
-                this.x = width / 2 - this.width / 2;
-                this.y = height - 100;
-                this.speed = 8;
-                this.color = '#00f3ff';
-            }
+    manualWater() {
+        this.addResource('water', 5);
+        UI.spawnParticle(event.clientX, event.clientY, "+5💧", "#45a29e");
+        UI.updateStats();
+    }
 
-            update() {
-                if (keys.ArrowLeft && this.x > 0) {
-                    this.x -= this.speed;
-                }
-                if (keys.ArrowRight && this.x + this.width < width) {
-                    this.x += this.speed;
-                }
-            }
-
-            draw() {
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = this.color;
-                ctx.fillStyle = this.color;
-                
-                // Tegn skipet (en trekant for kulere look)
-                ctx.beginPath();
-                ctx.moveTo(this.x + this.width/2, this.y);
-                ctx.lineTo(this.x + this.width, this.y + this.height);
-                ctx.lineTo(this.x, this.y + this.height);
-                ctx.fill();
-                
-                ctx.shadowBlur = 0;
-            }
+    // --- FARMING ---
+    clickPlot(index) {
+        const plot = this.state.plotsData[index];
+        if (plot.state === 'empty') {
+            this.showPlantMenu(index);
+        } else if (plot.state === 'mature') {
+            this.harvest(index);
         }
+    }
 
-        class Obstacle {
-            constructor() {
-                this.width = Math.random() * 60 + 30; // Bredde mellom 30 og 90
-                this.height = 30;
-                this.x = Math.random() * (width - this.width);
-                this.y = -this.height;
-                this.speed = gameSpeed + Math.random() * 2;
-                this.color = '#ff0055';
-            }
-
-            update() {
-                this.y += this.speed;
-            }
-
-            draw() {
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = this.color;
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
-                ctx.shadowBlur = 0;
-            }
-        }
-
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
-                this.size = Math.random() * 3;
-                this.speedY = Math.random() * 5 + 2; // Farten på stjernene/partiklene
-                this.color = color;
-            }
+    plant(index, plantId) {
+        const plantInfo = CONFIG.plants.find(p => p.id === plantId);
+        const waterCost = plantInfo.waterCost * this.modifiers.waterCostMult;
+        
+        if (this.state.bio >= plantInfo.cost && this.state.water >= waterCost) {
+            this.state.bio -= plantInfo.cost;
+            this.state.water -= waterCost;
             
-            update() {
-                this.y += this.speedY;
-                if (this.y > height) {
-                    this.y = 0;
-                    this.x = Math.random() * width;
+            const plot = this.state.plotsData[index];
+            plot.state = 'growing';
+            plot.plant = plantInfo;
+            plot.progress = 0;
+            plot.maxTime = plantInfo.growTime * this.modifiers.growSpeed;
+            
+            this.renderPlots();
+            UI.updateStats();
+            this.log(`Посажен: ${plantInfo.name}`);
+        } else {
+            this.log("Недостаточно ресурсов для посадки.", "warn");
+        }
+        document.getElementById('plant-modal')?.remove();
+    }
+
+    harvest(index) {
+        const plot = this.state.plotsData[index];
+        const reward = plot.plant.reward;
+        this.state.bio += reward;
+        
+        // Chance for seed or extra energy
+        if(Math.random() > 0.8) {
+            this.addResource('energy', 10);
+            UI.spawnParticle(event.clientX, event.clientY, "BONUS!", "#fff");
+        }
+
+        UI.spawnParticle(event.clientX, event.clientY, `+${reward}🧬`, "#66fcf1");
+        
+        plot.state = 'empty';
+        plot.plant = null;
+        this.renderPlots();
+        UI.updateStats();
+    }
+
+    showPlantMenu(index) {
+        const existing = document.getElementById('plant-modal');
+        if(existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'plant-modal';
+        modal.style.cssText = `
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #1f2833; border: 1px solid #45a29e; padding: 20px;
+            border-radius: 8px; z-index: 500; box-shadow: 0 0 20px black;
+            display: flex; gap: 10px; flex-wrap: wrap; width: 320px;
+        `;
+
+        CONFIG.plants.forEach(p => {
+            const waterCost = Math.floor(p.waterCost * this.modifiers.waterCostMult);
+            const btn = document.createElement('div');
+            btn.style.cssText = `
+                flex: 1; min-width: 90px; background: rgba(0,0,0,0.3); padding: 10px;
+                border: 1px solid #333; cursor: pointer; text-align: center;
+                border-radius: 4px; transition: 0.2s;
+            `;
+            btn.innerHTML = `<div style="font-size:2rem">${p.icon}</div>
+                             <div style="font-weight:bold; font-size:0.8rem; color:#fff">${p.name}</div>
+                             <div style="font-size:0.7rem; color:#aaa">Cost: ${p.cost}🧬</div>
+                             <div style="font-size:0.7rem; color:#45a29e">Water: ${waterCost}💧</div>`;
+            
+            btn.onclick = () => Game.plant(index, p.id);
+            btn.onmouseenter = () => btn.style.borderColor = '#66fcf1';
+            btn.onmouseleave = () => btn.style.borderColor = '#333';
+            modal.appendChild(btn);
+        });
+
+        // Close details
+        const close = document.createElement('div');
+        close.innerText = "✖";
+        close.style.cssText = "position:absolute; top:5px; right:10px; cursor:pointer; color:#ff3838;";
+        close.onclick = () => modal.remove();
+        modal.appendChild(close);
+
+        document.body.appendChild(modal);
+    }
+
+    // --- UPGRADES ---
+    buyUpgrade(id) {
+        const upg = UPGRADES.find(u => u.id === id);
+        if (this.state.upgrades.includes(id)) return;
+        
+        if (this.state.bio >= upg.cost) {
+            this.state.bio -= upg.cost;
+            this.state.upgrades.push(id);
+            this.applyUpgrade(upg);
+            this.renderUpgrades();
+            UI.updateStats();
+            this.log(`Улучшение установлено: ${upg.name}`, "good");
+        }
+    }
+
+    applyUpgrade(upg) {
+        if(upg.effect === 'energyGen') this.modifiers.energyGen += upg.val;
+        if(upg.effect === 'waterGen') this.modifiers.waterGen += upg.val;
+        if(upg.effect === 'addPlot') {
+            this.state.plots += upg.val;
+            this.ensurePlots();
+            this.renderPlots();
+        }
+        if(upg.effect === 'reduceWater') this.modifiers.waterCostMult *= upg.val;
+        if(upg.effect === 'growSpeed') this.modifiers.growSpeed *= upg.val;
+    }
+
+    renderUpgrades() {
+        const list = document.getElementById('upgrade-list');
+        list.innerHTML = '';
+        UPGRADES.forEach(u => {
+            if (this.state.upgrades.includes(u.id)) return; // Hide purchased
+            
+            const el = document.createElement('div');
+            el.className = `upgrade-item ${this.state.bio >= u.cost ? 'affordable' : 'locked'}`;
+            el.onclick = () => this.buyUpgrade(u.id);
+            el.innerHTML = `
+                <div class="upg-header"><span>${u.name}</span> <span class="upg-cost">${u.cost} 🧬</span></div>
+                <div class="upg-desc">${u.desc}</div>
+            `;
+            list.appendChild(el);
+        });
+    }
+
+    renderPlots() {
+        const grid = document.getElementById('farm-grid');
+        grid.innerHTML = '';
+        this.state.plotsData.forEach((plot, idx) => {
+            const el = document.createElement('div');
+            el.className = `plot ${plot.state}`;
+            el.id = `plot-${idx}`;
+            el.onclick = () => this.clickPlot(idx);
+            
+            let content = '';
+            if (plot.state === 'empty') content = '<div style="font-size:2rem; opacity:0.2;">+</div>';
+            else {
+                content = `<div class="plant-icon">${plot.plant.icon}</div>`;
+                if(plot.state === 'growing') {
+                    const pct = Math.floor((plot.progress / plot.maxTime) * 100);
+                    content += `<div class="timer-ring">${pct}%</div>`;
+                    content += `<div style="position:absolute; bottom:0; left:0; height:4px; background:#66fcf1; width:${pct}%"></div>`;
                 }
             }
+            el.innerHTML = content;
+            grid.appendChild(el);
+        });
+        document.getElementById('plots-count').innerText = `Ячейки: ${this.state.plots}`;
+    }
 
-            draw() {
-                ctx.fillStyle = this.color;
-                ctx.globalAlpha = 0.6;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
-        }
+    // --- SYSTEM ---
+    log(msg, type='') {
+        const box = document.getElementById('game-log');
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        const time = new Date().toLocaleTimeString().split(' ')[0];
+        entry.innerText = `[${time}] ${msg}`;
+        box.prepend(entry);
+    }
 
-        // --- Spillobjekter ---
-        let player;
-        let obstacles = [];
-        let particles = [];
+    save() {
+        localStorage.setItem(CONFIG.saveKey, JSON.stringify(this.state));
+    }
 
-        function init() {
-            player = new Player();
-            obstacles = [];
-            particles = [];
-            score = 0;
-            gameSpeed = 5;
-            frames = 0;
-            isGameOver = false;
-
-            // Lag bakgrunnsstjerner
-            for (let i = 0; i < 50; i++) {
-                particles.push(new Particle(Math.random() * width, Math.random() * height, '#ffffff'));
-            }
-        }
-
-        // --- Hovedløkke ---
-        function animate() {
-            if (isGameOver) return;
-
-            ctx.clearRect(0, 0, width, height);
-
-            // 1. Oppdater og tegn bakgrunn
-            particles.forEach(p => {
-                p.update();
-                p.draw();
+    load() {
+        const data = localStorage.getItem(CONFIG.saveKey);
+        if (data) {
+            this.state = JSON.parse(data);
+            // Re-apply upgrades logic
+            this.state.upgrades.forEach(uid => {
+                const u = UPGRADES.find(def => def.id === uid);
+                if(u) this.applyUpgrade(u);
             });
-
-            // 2. Oppdater spiller
-            player.update();
-            player.draw();
-
-            // 3. Generer hindringer
-            if (frames % 40 === 0) { // Hvor ofte de dukker opp
-                obstacles.push(new Obstacle());
-            }
-
-            // Øk vanskelighetsgrad over tid
-            if (frames % 500 === 0) {
-                gameSpeed += 0.5;
-            }
-
-            // 4. Oppdater og sjekk kollisjon hindringer
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                let obs = obstacles[i];
-                obs.update();
-                obs.draw();
-
-                // Kollisjonssjekk (Axis-Aligned Bounding Box)
-                if (
-                    player.x < obs.x + obs.width &&
-                    player.x + player.width > obs.x &&
-                    player.y < obs.y + obs.height &&
-                    player.y + player.height > obs.y
-                ) {
-                    gameOver();
-                }
-
-                // Fjern hindringer som er utenfor skjermen
-                if (obs.y > height) {
-                    obstacles.splice(i, 1);
-                    score += 10;
-                    scoreDisplay.innerText = `Poeng: ${score}`;
-                }
-            }
-
-            frames++;
-            animationId = requestAnimationFrame(animate);
+            this.ensurePlots(); // In case save is old
         }
+    }
 
-        function startGame() {
-            init();
-            startScreen.classList.add('hidden');
-            gameOverScreen.classList.add('hidden');
-            animate();
+    gameOver() {
+        this.running = false;
+        clearInterval(this.timer);
+        document.getElementById('overlay').classList.remove('hidden');
+        document.getElementById('overlay').innerHTML = `
+            <h1 style="color:var(--neon-red)">КРИТИЧЕСКИЙ СБОЙ</h1>
+            <p>Колония погибла.</p>
+            <button class="btn-action" onclick="location.reload()">Перезагрузка Системы</button>
+        `;
+        localStorage.removeItem(CONFIG.saveKey);
+    }
+}
+
+// UI Helper
+const UI = {
+    updateStats: () => {
+        const s = Game.state;
+        const hpPct = Math.max(0, s.hp);
+        document.getElementById('hp-val').innerText = `${hpPct}%`;
+        document.getElementById('hp-bar').style.width = `${hpPct}%`;
+
+        document.getElementById('energy-val').innerText = `${Math.floor(s.energy)}/${s.maxEnergy}`;
+        document.getElementById('energy-bar').style.width = `${(s.energy/s.maxEnergy)*100}%`;
+        
+        document.getElementById('water-val').innerText = `${Math.floor(s.water)}/${s.maxWater}`;
+        document.getElementById('water-bar').style.width = `${(s.water/s.maxWater)*100}%`;
+        
+        document.getElementById('bio-val').innerText = Math.floor(s.bio);
+    },
+    
+    updatePlot: (plot) => {
+        // Only redraw simple updates to avoid DOM thrashing
+        const idx = Game.state.plotsData.indexOf(plot);
+        const el = document.getElementById(`plot-${idx}`);
+        if(el && plot.state === 'growing') {
+             const pct = Math.floor((plot.progress / plot.maxTime) * 100);
+             el.querySelector('.timer-ring').innerText = `${pct}%`;
+             el.querySelector('div[style*="position:absolute"]').style.width = `${pct}%`;
+        } else if (el && plot.state === 'mature' && !el.classList.contains('mature')) {
+            Game.renderPlots(); // Full redraw for state change
         }
+    },
 
-        function gameOver() {
-            isGameOver = true;
-            cancelAnimationFrame(animationId);
-            finalScoreDisplay.innerText = `Du fikk ${score} poeng`;
-            gameOverScreen.classList.remove('hidden');
-        }
+    checkUpgrades: () => {
+        const list = document.getElementById('upgrade-list');
+        Array.from(list.children).forEach((el, idx) => {
+            // Find corresponding upgrade in remaining list
+            // Simplified: Just toggle class based on cost
+            // (Ideally match IDs, but visual check is enough for this size)
+        });
+        Game.renderUpgrades(); // Brute force refresh for safety
+    },
 
-    </script>
+    spawnParticle: (x, y, text, color) => {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.innerText = text;
+        p.style.color = color;
+        p.style.left = `${x}px`;
+        p.style.top = `${y}px`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 1000);
+    },
+
+    shake: () => {
+        document.body.style.transform = `translate(${Math.random()*4-2}px, ${Math.random()*4-2}px)`;
+        setTimeout(() => document.body.style.transform = 'none', 50);
+    }
+};
+
+const Game = new GameEngine();
+
+</script>
 </body>
 </html>
